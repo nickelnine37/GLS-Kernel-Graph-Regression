@@ -18,11 +18,20 @@ CURRENT_FOLDER = os.path.dirname(os.path.realpath(__file__))
 
 class FirePipeline:
 
-    def __init__(self, start_date: str = '2017-01-01', end_date: str = '2021-04-20'):
+    def __init__(self, start_date: str = '2017-01-01', end_date: str = '2021-04-20', transform: str='log'):
+        """
+
+        Parameters
+        ----------
+        start_date
+        end_date
+        transform       one of 'log', 'quantile', 'norm', None
+        """
 
         self.start_date = pd.to_datetime(start_date + ' 12:00:00')
         self.end_date = pd.to_datetime(end_date + ' 12:00:00')
         self.date_range = pd.date_range(start=start_date, end=end_date)
+        self.transform = transform
 
     def read_data_raw(self):
         """
@@ -115,24 +124,75 @@ class FirePipeline:
         data = self.read_data_raw()
         data = self.add_cols(data)
         data = self.add_region(data)
-        self.data = self.clean(data)
+        data = self.clean(data)
+
+        if self.transform == 'log':
+            self.data = self.transform_log(data)
+        elif self.transform == 'quantile':
+            self.data = self.transform_quantile(data)
+        elif self.transform == 'norm':
+            self.data = self.transform_normalize(data)
+        elif not self.transform:
+            self.data = data
+        else:
+            raise ValueError
 
         return self
+
+    def transform_log(self, data: pd.DataFrame):
+
+        data = np.log(1 + data)
+        data = self.transform_normalize(data)
+
+        return data
+
+    def transform_normalize(self, data: pd.DataFrame):
+        return (data - data.values.mean()) / data.values.std()
+
+    def transform_quantile(self, data: pd.DataFrame):
+        """
+        Do a quntile transform so that each dataframe is normal
+        """
+        transformer = QuantileTransformer(output_distribution='normal')
+        data.loc[:, :] = transformer.fit_transform(data)
+        return data
 
     def to_csv(self):
         """
         Save the data to a csv
         """
-        self.data.to_csv(CURRENT_FOLDER + f'/processed/fire.csv')
+
+        if self.transform == 'log':
+            folder = 'LogNormalize'
+        elif self.transform == 'quantile':
+            folder = 'Quantile'
+        elif self.transform == 'norm':
+            folder = 'Normalize'
+        else:
+            folder = 'NoTransform'
+
+        self.data.to_csv(CURRENT_FOLDER + f'/processed/{folder}/Fire.csv')
         return self
 
 
 class MetPipeline:
 
-    def __init__(self, metric: str, start_date: str = '2017-01-01', end_date: str = '2021-04-20', null_tol: float = 0.1):
+    def __init__(self, metric: str, start_date: str = '2017-01-01', end_date: str = '2021-04-20', null_tol: float = 0.1, transform: str='log'):
+        """
+
+        Parameters
+        ----------
+        metric          One of 'Ozone', 'SO2', 'CO', 'NO2', 'PM25', 'PM10', 'Wind','Pressure', 'Temperature', 'Humidity'
+        start_date
+        end_date
+        null_tol        The fraction of nulls tolerated per monitor before discarding
+        transform       Which transform to perform ('log', 'quantile', 'norm', or None)
+        """
+
         self.metric = metric
         self.date_range = pd.date_range(start=start_date, end=end_date)
         self.null_tol = null_tol
+        self.transform = transform
 
     def read_data_raw(self):
         """
@@ -219,13 +279,42 @@ class MetPipeline:
 
         return cleaned_data
 
-    def transform(self, data: pd.DataFrame):
+    def transform_quantile(self, data: pd.DataFrame):
         """
         Do a quntile transform so that each dataframe is normal
         """
         transformer = QuantileTransformer(output_distribution='normal')
         data.loc[:, :] = transformer.fit_transform(data)
         return data
+
+
+    def transform_log(self, data: pd.DataFrame):
+        """
+        Do a quntile transform so that each dataframe is normal
+        """
+
+        transforms = {'CO': {'zero-max': True, 'log': True, 'log const': 0.1},
+                      'SO2': {'zero-max': True, 'log': True, 'log const': 0.1},
+                      'NO2': {'zero-max': True, 'log': True, 'log const': 1},
+                      'Ozone': {'zero-max': True, 'log': False, 'log const': None},
+                      'PM25': {'zero-max': True, 'log': True, 'log const': 1},
+                      'PM10': {'zero-max': True, 'log': True, 'log const': 1},
+                      'Pressure': {'zero-max': False, 'log': False, 'log const': None},
+                      'Humidity': {'zero-max': False, 'log': False, 'log const': None},
+                      'Temperature': {'zero-max': False, 'log': False, 'log const': None},
+                      'Wind': {'zero-max': False, 'log': True, 'log const': 0.1}}
+
+        if transforms[self.metric]['zero-max']:
+            data = np.maximum(data, 0)
+        if transforms[self.metric]['log']:
+            data = np.log(data + transforms[self.metric]['log const'])
+
+        data = self.transform_normalize(data)
+
+        return data
+
+    def transform_normalize(self, data: pd.DataFrame):
+        return (data - data.values.mean()) / data.values.std()
 
     def process(self):
         """
@@ -237,7 +326,17 @@ class MetPipeline:
         data = self.add_id_column(data)
         data = self.concat_sites(data)
         data = self.remove_nulls(data)
-        self.data = self.transform(data)
+
+        if self.transform == 'log':
+            self.data = self.transform_log(data)
+        elif self.transform == 'quantile':
+            self.data = self.transform_quantile(data)
+        elif self.transform == 'norm':
+            self.data = self.transform_normalize(data)
+        elif not self.transform:
+            self.data = data
+        else:
+            raise ValueError
 
         return self
 
@@ -245,7 +344,17 @@ class MetPipeline:
         """
         Save the data to a csv
         """
-        self.data.to_csv(CURRENT_FOLDER + f'/processed/{self.metric}.csv')
+
+        if self.transform == 'log':
+            folder = 'LogNormalize'
+        elif self.transform == 'quantile':
+            folder = 'Quantile'
+        elif self.transform == 'norm':
+            folder = 'Normalize'
+        else:
+            folder = 'NoTransform'
+
+        self.data.to_csv(CURRENT_FOLDER + f'/processed/{folder}/{self.metric}.csv')
         return self
 
 
@@ -255,7 +364,7 @@ if __name__ == '__main__':
     # should be the same place download_met_data() was called on in dowload.py
     DATA_FOLDER = '/media/ed/DATA/Datasets/GLSKGR'
 
-    for metric in tqdm(['Ozone', 'SO2', 'CO', 'NO2', 'PM25', 'PM10', 'Wind', 'Pressure', 'Temperature', 'Humidity']):
-        MetPipeline(metric).process().to_csv()
+    # for metric in tqdm(['Ozone', 'SO2', 'CO', 'NO2', 'PM25', 'PM10', 'Wind', 'Pressure', 'Temperature', 'Humidity']):
+        # MetPipeline(metric, transform='norm').process().to_csv()
 
-    FirePipeline().process().to_csv()
+    FirePipeline(transform=None).process().to_csv()
