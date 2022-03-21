@@ -80,7 +80,7 @@ class KGR(Model):
 
     def optimize(self):
 
-        for i in tqdm(range(9)):
+        for i in tqdm(range(9), leave=False):
             if i % 3 == 0:
                 self.update_gamma(self.optimize_gamma())
             if i % 3 == 1:

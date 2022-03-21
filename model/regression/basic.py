@@ -7,6 +7,23 @@ from ..targets import Targets
 from .base import Model
 
 
+class NaiveRegression(Model):
+
+    def __init__(self):
+        super().__init__()
+        pass
+
+    def set_data(self, features: Features, targets: Targets):
+        super().set_data(features, targets)
+        return self.fit()
+
+    def fit(self):
+
+        self.F = self.features.X.reindex(columns = self.targets.sites.index).T
+        self.F = self.F.fillna(self.F.mean())
+
+        return self
+
 class SKLearnModel(Model):
 
     def __init__(self, **params):

@@ -15,7 +15,7 @@ class Features:
 
     def get_X(self) -> pd.DataFrame:
         """
-        Get a pandas (T, M) Dataframe containing all the features
+        Get a (T, M) pandas Dataframe containing all the features
         """
         X = [self.get_data_PCA(metric, n_components=10) for metric in self.metrics]
         X.append(Features.get_data('fire') / 1000)

@@ -105,17 +105,27 @@ class California:
         elevation = np.fromfile(f'{location}/e10g', dtype=np.int16).reshape(6000, 10800)
         return elevation[self.imin:self.imax, self.jmin:self.jmax]
 
-    def plot_outline(self, ax, line=None):
+    def plot_outline(self, ax, line=None, fill=False):
         """
         Simple function to plot the outline of california onto a axis
         """
 
         for boundary in self.state_boundaries:
             out_x, out_y = self.transform(boundary[:, 0], boundary[:, 1])
-            if isinstance(line, dict):
-                ax.plot(out_x, out_y, **line)
+
+            if not fill:
+                if isinstance(line, dict):
+                    ax.plot(out_x, out_y, **line)
+                else:
+                    ax.plot(out_x, out_y, lw=1.5, color='white', ls='--')
             else:
-                ax.plot(out_x, out_y, lw=1.5, color='white', ls='--')
+                path = Path(np.array([out_x, out_y]).T)
+                if isinstance(fill, dict):
+                    patch = PathPatch(path, **fill)
+                else:
+                    patch = PathPatch(path, facecolor='gray', alpha=0.5, lw=0)
+                    
+                ax.add_patch(patch)
 
         self.fix_ax(ax)
 
@@ -171,7 +181,7 @@ class California:
         return ax
 
 
-    def plot_regions(self, ax=None):
+    def plot_regions(self, ax=None, legend: bool=True):
 
         region_county_map = {'Shasta': [0, 20, 42, 59, 61],
                              'N Coast': [12, 24, 25, 37, 41, 58],
@@ -204,7 +214,8 @@ class California:
             patch_labels.append(patch)
             region_labels.append(region)
 
-        ax.legend(patch_labels, region_labels, fontsize='small')
+        if legend:
+            ax.legend(patch_labels, region_labels, fontsize='small')
         self.fix_ax(ax)
 
         return ax

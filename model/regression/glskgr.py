@@ -68,7 +68,7 @@ class CovarianceEstimator:
 
 class GLSKGR(Model):
 
-    def __init__(self, gamma: float = 1, K_std: float = 20, filter_func: str = 'sigmoid', beta: float = 1, alpha=1):
+    def __init__(self, gamma: float = 1, K_std: float = 20, filter_func: str = 'sigmoid', beta: float = 1, alpha=10):
         MAX_ITERS = 60
         FTOL = 1e-4
         super().__init__(gamma=gamma, K_std=K_std, filter_func=filter_func, beta=beta, alpha=alpha, max_iters=MAX_ITERS, ftol=FTOL)
@@ -147,6 +147,11 @@ class GLSKGR(Model):
         self.params['gamma'] = gamma
         return self.solve_GLS()
 
+    def update_alpha(self, alpha):
+        self.params['alpha'] = alpha
+        self.covariace_estimator = CovarianceEstimator(alpha)
+        return self.solve_GLS()
+
     def update_beta(self, beta):
         self.params['beta'] = beta
         return self.set_Hs().solve_GLS()
@@ -154,6 +159,11 @@ class GLSKGR(Model):
     def update_Kstd(self, K_std):
         self.params['K_std'] = K_std
         return self.set_K().solve_GLS()
+
+    def optimize_alpha(self):
+        alphas = np.logspace(-2, 0.8, 10)
+        error = [self.update_alpha(alpha).RMSE_unlabelled_full() for alpha in tqdm(alphas, leave=False)]
+        return alphas[np.argmin(error)]
 
     def optimize_gamma(self):
         gammas = np.logspace(-6, 1, 50)
