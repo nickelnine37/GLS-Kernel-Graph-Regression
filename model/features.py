@@ -25,7 +25,7 @@ class Features:
         Get a (T, M) pandas Dataframe containing all the features
         """
         X = [self.get_data_PCA(metric,  n_components=10, transform=self.transform) for metric in self.metrics]
-        X.append(self.get_data('Fire', transform=self.transform))
+        X.append(self.get_data('Fire', transform='log'))
         X = pd.concat(X, axis=1)
         X = pd.DataFrame(X.values[:-1, :], columns=X.columns, index=X.index[1:]) # offset shift by 1 day
 
