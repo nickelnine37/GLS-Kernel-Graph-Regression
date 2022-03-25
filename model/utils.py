@@ -83,7 +83,7 @@ def diag_inds(d: Union[int, list, tuple], N: int) -> (np.ndarray, np.ndarray):
 
     Parameters
     ----------
-    d        Chose the d-th diagonal. 0 -> primary, 1 -> first upper, -1 -> first lower etc.
+    d        Choose the d-th diagonal. 0 -> primary, 1 -> first upper, -1 -> first lower etc.
              If an iterable is passed, return all diagonals listed.
     N        The dimenions of the square matrix
 
@@ -105,6 +105,22 @@ def diag_inds(d: Union[int, list, tuple], N: int) -> (np.ndarray, np.ndarray):
 
         return np.concatenate(inds1), np.concatenate(inds2)
 
+
+def diag_i(A: np.ndarray, d: int=0) -> np.ndarray:
+    """
+    Return the d-th diagonal of an NxN array A.
+    Parameters
+    ----------
+    A        NxN numpy array
+    d        Choose the d-th diagonal. 0 -> primary, 1 -> first upper, -1 -> first lower etc.
+             If an iterable is passed, return all diagonals listed.
+
+    Returns
+    -------
+
+    """
+    assert A.ndim == 2
+    return A[diag_inds(d, A.shape[0])]
 
 def make_B1(T: int, sparse: bool = True) -> Union[np.ndarray, csc_matrix]:
     """

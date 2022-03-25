@@ -5,7 +5,7 @@ from tqdm.autonotebook import tqdm
 from ..features import Features
 from ..targets import Targets
 from ..laplacian import Laplacian
-from ..utils import make_B1, make_B2, make_ST
+from ..utils import make_B1, make_B2, make_ST, make_STi
 from .base import Model, filter_functions
 
 class CovarianceEstimator:
@@ -68,10 +68,10 @@ class CovarianceEstimator:
 
 class GLSKGR(Model):
 
-    def __init__(self, gamma: float = 1, K_std: float = 20, filter_func: str = 'sigmoid', beta: float = 1, alpha=10):
+    def __init__(self, gamma: float = 1, K_std: float = 20, filter_func: str = 'sigmoid', beta: float = 1, alpha=10, **kwargs):
         MAX_ITERS = 60
         FTOL = 1e-4
-        super().__init__(gamma=gamma, K_std=K_std, filter_func=filter_func, beta=beta, alpha=alpha, max_iters=MAX_ITERS, ftol=FTOL)
+        super().__init__(gamma=gamma, K_std=K_std, filter_func=filter_func, beta=beta, alpha=alpha, max_iters=MAX_ITERS, ftol=FTOL, **kwargs)
         self.covariace_estimator = CovarianceEstimator(alpha)
 
     def set_laplacian(self, laplacian: Laplacian):
@@ -142,6 +142,14 @@ class GLSKGR(Model):
 
         return self
 
+    def set_Fvar(self):
+        lamK_, V_ = np.linalg.eig((self.targets.ST.T.to_sparse_array() @ make_STi(self.targets.T_, self.theta, sparse=True)) @ (self.targets.ST @ self.K))
+        lamH_, U_ = np.linalg.eig(self.targets.SN.T.to_sparse_array() @ np.linalg.solve(self.SN, self.targets.SN @ self.Hs))
+        J_ = 1 / (np.outer(lamH_, lamK_) + self.params['gamma'])
+        Fvar = (np.linalg.inv(U_).T * (self.Hs @ U_)) @ J_ @ ((V_.T @ self.K) * np.linalg.inv(V_))
+        self.Fvar = pd.DataFrame(Fvar, index=self.targets.sites.index, columns=self.targets.Y0.columns)
+        return self
+
 
     def update_gamma(self, gamma):
         self.params['gamma'] = gamma
@@ -189,5 +197,44 @@ class GLSKGR(Model):
                 self.update_beta(self.optimize_beta())
             if i % 3 == 2:
                 self.update_Kstd(self.optimize_Kstd())
+
+        return self.params, self.RMSE_unlabelled_full()
+
+
+
+
+
+class GraphFeaturesGLSKGR(GLSKGR):
+
+    def __init__(self, gamma: float = 1, beta: float = 1, beta_f: float=1, filter_func: str = 'exponential'):
+        super().__init__(gamma=gamma, beta=beta, beta_f=beta_f, filter_func=filter_func)
+
+
+    def set_K(self):
+        self.K = self.features.get_Hs(self.params['filter_func'], self.params['beta_f'])
+        return self
+
+    def set_data(self, features: Features, targets: Targets):
+        features.get_L()
+        return super().set_data(features, targets)
+
+    def update_beta_f(self, beta_f):
+        self.params['beta_f'] = beta_f
+        return self.set_K().solve_GLS()
+
+    def optimize_beta_f(self):
+        betas = np.logspace(0, 2, 50)
+        error = [self.update_beta_f(beta).RMSE_unlabelled_full() for beta in tqdm(betas, leave=False)]
+        return betas[np.argmin(error)]
+
+    def optimize(self):
+
+        for i in tqdm(range(9), leave=False):
+            if i % 3 == 0:
+                self.update_gamma(self.optimize_gamma())
+            if i % 3 == 1:
+                self.update_beta(self.optimize_beta())
+            if i % 3 == 2:
+                self.update_beta_f(self.optimize_beta_f())
 
         return self.params, self.RMSE_unlabelled_full()
