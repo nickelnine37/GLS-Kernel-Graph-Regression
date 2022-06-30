@@ -6,7 +6,8 @@ from ..features import Features
 from ..targets import Targets
 from ..laplacian import Laplacian
 
-from .base import Model, filter_functions
+from .base import Model
+from . import filter_functions
 
 
 class KGR(Model):
@@ -101,8 +102,8 @@ class KGR(Model):
 
 class GraphFeaturesKGR(KGR):
 
-    def __init__(self, gamma: float = 1, beta: float = 1, beta_f: float=1, filter_func: str = 'exponential'):
-        super().__init__(gamma=gamma, beta=beta, beta_f=beta_f, filter_func=filter_func)
+    def __init__(self, gamma: float = 1, beta: float = 1, beta_f: float=1, filter_func: str = 'exponential', **kwargs):
+        super().__init__(gamma=gamma, beta=beta, beta_f=beta_f, filter_func=filter_func, **kwargs)
 
 
     def set_K(self):

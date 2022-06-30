@@ -5,7 +5,7 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 from sklearn.decomposition import PCA
 from scipy.spatial.distance import pdist, squareform
 
-from model.regression.base import filter_functions
+from model.regression import filter_functions
 
 CURRENT_FOLDER = os.path.dirname(os.path.realpath(__file__))
 

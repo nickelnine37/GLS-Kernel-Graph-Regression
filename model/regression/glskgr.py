@@ -6,7 +6,8 @@ from ..features import Features
 from ..targets import Targets
 from ..laplacian import Laplacian
 from ..utils import make_B1, make_B2, make_ST, make_STi
-from .base import Model, filter_functions
+from .base import Model
+from . import filter_functions
 
 class CovarianceEstimator:
     """
@@ -146,7 +147,7 @@ class GLSKGR(Model):
         lamK_, V_ = np.linalg.eig((self.targets.ST.T.to_sparse_array() @ make_STi(self.targets.T_, self.theta, sparse=True)) @ (self.targets.ST @ self.K))
         lamH_, U_ = np.linalg.eig(self.targets.SN.T.to_sparse_array() @ np.linalg.solve(self.SN, self.targets.SN @ self.Hs))
         J_ = 1 / (np.outer(lamH_, lamK_) + self.params['gamma'])
-        Fvar = (np.linalg.inv(U_).T * (self.Hs @ U_)) @ J_ @ ((V_.T @ self.K) * np.linalg.inv(V_))
+        Fvar = np.real((np.linalg.inv(U_).T * (self.Hs @ U_)) @ J_ @ (np.linalg.inv(V_) * (V_.T @ self.K)))
         self.Fvar = pd.DataFrame(Fvar, index=self.targets.sites.index, columns=self.targets.Y0.columns)
         return self
 
@@ -206,8 +207,8 @@ class GLSKGR(Model):
 
 class GraphFeaturesGLSKGR(GLSKGR):
 
-    def __init__(self, gamma: float = 1, beta: float = 1, beta_f: float=1, filter_func: str = 'exponential'):
-        super().__init__(gamma=gamma, beta=beta, beta_f=beta_f, filter_func=filter_func)
+    def __init__(self, gamma: float = 1, beta: float = 1, beta_f: float=1, filter_func: str = 'exponential', **kwargs):
+        super().__init__(gamma=gamma, beta=beta, beta_f=beta_f, filter_func=filter_func, **kwargs)
 
 
     def set_K(self):

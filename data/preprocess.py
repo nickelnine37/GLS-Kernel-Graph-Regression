@@ -8,6 +8,8 @@ from geo.monitors import Monitors
 import numpy as np
 from geo.california import California
 
+from data import get_data_dir
+
 pd.set_option('display.max_rows', 100)
 pd.set_option('display.min_rows', 50)
 pd.set_option('display.width', 200)
@@ -18,16 +20,18 @@ CURRENT_FOLDER = os.path.dirname(os.path.realpath(__file__))
 
 class FirePipeline:
 
-    def __init__(self, start_date: str = '2017-01-01', end_date: str = '2021-04-20', transform: str='log'):
+    def __init__(self, data_dir: str, start_date: str = '2017-01-01', end_date: str = '2021-04-20', transform: str=None):
         """
 
         Parameters
         ----------
+        data_dir        location of raw data
         start_date
         end_date
         transform       one of 'log', 'quantile', 'norm', None
         """
 
+        self.data_dir = data_dir
         self.start_date = pd.to_datetime(start_date + ' 12:00:00')
         self.end_date = pd.to_datetime(end_date + ' 12:00:00')
         self.date_range = pd.date_range(start=start_date, end=end_date)
@@ -39,7 +43,7 @@ class FirePipeline:
         """
 
         cols = ['incident_name', 'incident_date_created', 'incident_date_extinguished', 'incident_acres_burned', 'incident_latitude', 'incident_longitude']
-        data = pd.read_csv(DATA_FOLDER + f'/fires/fires.csv', parse_dates=['incident_date_created', 'incident_date_extinguished'], usecols=cols).dropna()
+        data = pd.read_csv(os.path.join(self.data_dir, 'fires', 'fires.csv'), parse_dates=['incident_date_created', 'incident_date_extinguished'], usecols=cols).dropna()
         data = data.rename({'incident_name': 'Name',
                             'incident_date_created': 'Started',
                             'incident_acres_burned': 'Acres',
@@ -171,17 +175,22 @@ class FirePipeline:
         else:
             folder = 'NoTransform'
 
-        self.data.to_csv(CURRENT_FOLDER + f'/processed/{folder}/Fire.csv')
-        return self
+        dir = os.path.join(CURRENT_FOLDER, 'processed', folder)
+
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+
+        self.data.to_csv(os.path.join(dir, 'Fire.csv'))
 
 
 class MetPipeline:
 
-    def __init__(self, metric: str, start_date: str = '2017-01-01', end_date: str = '2021-04-20', null_tol: float = 0.1, transform: str='log'):
+    def __init__(self, data_dir: str, metric: str, start_date: str = '2017-01-01', end_date: str = '2021-04-20', null_tol: float = 0.1, transform: str='log'):
         """
 
         Parameters
         ----------
+        data_dir        location of raw data
         metric          One of 'Ozone', 'SO2', 'CO', 'NO2', 'PM25', 'PM10', 'Wind','Pressure', 'Temperature', 'Humidity'
         start_date
         end_date
@@ -189,6 +198,7 @@ class MetPipeline:
         transform       Which transform to perform ('log', 'quantile', 'norm', or None)
         """
 
+        self.data_dir = data_dir
         self.metric = metric
         self.date_range = pd.date_range(start=start_date, end=end_date)
         self.null_tol = null_tol
@@ -206,7 +216,7 @@ class MetPipeline:
         years = [2017, 2018, 2019, 2020, 2021]
 
         def read_csv(year):
-            return pd.read_csv(DATA_FOLDER + f'/met/{self.metric}_{year}.csv', usecols=cols, parse_dates=['Date Local'])
+            return pd.read_csv(os.path.join(self.data_dir, 'met', f'{self.metric}_{year}.csv'), usecols=cols, parse_dates=['Date Local'])
 
         return pd.concat([read_csv(year) for year in years])
 
@@ -354,17 +364,36 @@ class MetPipeline:
         else:
             folder = 'NoTransform'
 
-        self.data.to_csv(CURRENT_FOLDER + f'/processed/{folder}/{self.metric}.csv')
-        return self
+        dir = os.path.join(CURRENT_FOLDER, 'processed', folder)
+
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+
+        self.data.to_csv(os.path.join(dir, f'{self.metric}.csv'))
 
 
 if __name__ == '__main__':
 
-    # this is where the raw data is stored
-    # should be the same place download_met_data() was called on in dowload.py
-    DATA_FOLDER = '/media/ed/DATA/Datasets/GLSKGR'
+    DATA_DIR = get_data_dir()
 
-    # for metric in tqdm(['Ozone', 'SO2', 'CO', 'NO2', 'PM25', 'PM10', 'Wind', 'Pressure', 'Temperature', 'Humidity']):
-        # MetPipeline(metric, transform='norm').process().to_csv()
+    # Preprocess the fire data for each transform type
 
-    FirePipeline(transform=None).process().to_csv()
+    transform_pbar = tqdm(['log', 'quantile', 'norm', None], leave=False)
+
+    for transform in transform_pbar:
+        transform_pbar.set_description(f'Transform: {transform}')
+        FirePipeline(DATA_DIR, transform=transform).process().to_csv()
+
+    # Preprocess each metric for each transform type
+
+    transform_pbar = tqdm(['log', 'quantile', 'norm', None], leave=False)
+    for transform in transform_pbar:
+
+        transform_pbar.set_description(f'Transform: {transform}')
+        metric_pbar = tqdm(['Ozone', 'SO2', 'CO', 'NO2', 'PM25', 'PM10', 'Wind', 'Pressure', 'Temperature', 'Humidity'], leave=False)
+
+        for metric in metric_pbar:
+            metric_pbar.set_description(f'Metric: {metric}')
+            MetPipeline(DATA_DIR, metric, transform=transform).process().to_csv()
+
+    
